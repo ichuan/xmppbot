@@ -9,6 +9,7 @@ will execute a bash script like this:
     bash cmds/test.sh fire
 '''
 
+import re
 import time
 import asyncio
 import contextvars
@@ -41,9 +42,12 @@ def message_received(msg):
         body = 'I don\'t support OTR/OMEMO yet, send me plain text please!'
     # cmd
     args = text.split(' ')
-    script = CMD_PATH.joinpath('{}.sh'.format(args[0].lower()))
+    arg0 = args[0].lower()
+    if not re.match(r'^[a-z0-9_.-]+$', arg0):
+        return
+    script = CMD_PATH.joinpath('{}.sh'.format(arg0))
     if not script.is_file():
-        body = 'script {}.sh not exists'.format(args[0].lower())
+        body = 'script {}.sh not exists'.format(arg0)
     else:
         cmd = ['bash', script] + args[1:]
         try:
