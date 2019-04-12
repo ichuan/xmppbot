@@ -1,0 +1,8 @@
+*.swp
+/logs/*
+!/logs/.gitkeep
+/src/cmds/*
+!/src/cmds/.gitkeep
+!/src/cmds/ping.sh
+.DS_Store
+__pycache__/
