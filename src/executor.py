@@ -57,7 +57,6 @@ def message_received(msg):
         except Exception as e:
             body = 'EXP: {}'.format(e)
     reply.body[None] = body
-    logger.info(repr(text))
     xmpp_client.get().enqueue(reply)
 
 
@@ -90,7 +89,6 @@ async def _executor(my_jid, my_passwd, master_jid):
         except asyncio.CancelledError:
             # asyncio.sleep
             # KeyboardInterrupt
-            logger.error('CancelledError')
             raise
         except Exception as e:
             logger.warning(repr(e))
