@@ -40,8 +40,5 @@ def shell(cmd):
         with TemporaryFile() as stderr:
             subprocess.call(cmd, stdout=stdout, stderr=stderr)
             stderr.seek(0)
-            errs = stderr.read()
-            if errs:
-                raise ValueError(errs)
             stdout.seek(0)
-            return stdout.read()
+            return stdout.read() + stderr.read()
