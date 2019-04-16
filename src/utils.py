@@ -5,9 +5,7 @@
 import os
 import logging
 import logging.handlers
-import subprocess
 from pathlib import Path
-from tempfile import TemporaryFile
 
 
 LOG_DIR = Path(__file__).resolve().parent.parent.joinpath('logs')
@@ -32,13 +30,3 @@ def make_file_logger(name):
     )
     logger.addHandler(handler)
     return logger
-
-
-def shell(cmd):
-    # subprocess.check_output() limits stdout to 64KB
-    with TemporaryFile() as stdout:
-        with TemporaryFile() as stderr:
-            subprocess.call(cmd, stdout=stdout, stderr=stderr)
-            stderr.seek(0)
-            stdout.seek(0)
-            return stdout.read() + stderr.read()

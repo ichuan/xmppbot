@@ -12,7 +12,6 @@ will execute a bash script like this:
 import re
 import time
 import asyncio
-import contextvars
 from pathlib import Path
 from datetime import timedelta
 
@@ -24,12 +23,36 @@ import utils
 
 
 CMD_PATH = Path(__file__).resolve().parent.joinpath('cmds')
+# 3min
+SUBPROCESS_MAX_RUNTIME = 3 * 60
 
-xmpp_client = contextvars.ContextVar('active xmpp client')
+G = {
+    'client': None,
+    'proc': None,
+}
 logger = utils.make_file_logger('executor')
 
 
-def message_received(msg):
+async def _continuous_send_output(reply, stream):
+    while not stream.at_eof():
+        bytes_ = []
+        while not stream.at_eof():
+            try:
+                byte = await asyncio.wait_for(
+                    stream.read(1),
+                    timeout=1
+                )
+                if byte:
+                    bytes_.append(byte)
+            except asyncio.TimeoutError:
+                break
+        if bytes_:
+            reply.body[None] = b''.join(bytes_).decode('utf-8')
+            await G['client'].send(reply)
+    return b'Process done'
+
+
+async def _message_received(msg):
     if not msg.body:
         return
     if aioxmpp.MessageType.CHAT != msg.type_:
@@ -37,6 +60,14 @@ def message_received(msg):
     reply = msg.make_reply()
     text = msg.body.any().strip()
     if not text:
+        return
+    # previous session?
+    if G['proc'] and G['proc'].returncode is None:
+        if text == 'KILL':
+            G['proc'].kill()
+        else:
+            G['proc'].stdin.write(text.encode('utf-8') + b'\n')
+            await G['proc'].stdin.drain()
         return
     if text.startswith(('?OTR', 'I sent you an OMEMO encrypted message but')):
         body = 'I don\'t support OTR/OMEMO yet, send me plain text please!'
@@ -49,15 +80,37 @@ def message_received(msg):
     if not script.is_file():
         body = 'script {}.sh not exists'.format(arg0)
     else:
-        cmd = ['bash', script] + args[1:]
+        cmd = ['bash', script.as_posix()] + args[1:]
         try:
-            body = utils.shell(cmd).decode('utf-8').strip()
-        except ValueError as e:
-            body = 'ERR: {}'.format(e.args[0])
+            G['proc'] = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                # 64KB output max
+                limit=65_536,
+                bufsize=0
+            )
+            await asyncio.wait_for(
+                _continuous_send_output(reply, G['proc'].stdout),
+                # G['proc'].communicate(),
+                timeout=SUBPROCESS_MAX_RUNTIME,
+            )
+            return
+        except asyncio.TimeoutError:
+            body = 'cmd "{}" timed out and terminated'.format(cmd)
         except Exception as e:
-            body = 'EXP: {}'.format(e)
+            body = 'Exception: {}'.format(e)
+        finally:
+            if G['proc'] and G['proc'].returncode is None:
+                G['proc'].terminate()
+            G['proc'] = None
     reply.body[None] = body
-    xmpp_client.get().enqueue(reply)
+    await G['client'].send(reply)
+
+
+def message_received(msg):
+    asyncio.create_task(_message_received(msg))
 
 
 async def _executor(my_jid, my_passwd, master_jid):
@@ -69,7 +122,7 @@ async def _executor(my_jid, my_passwd, master_jid):
     # auto re-connect every 10s after conn down
     client.backoff_factor = 1
     client.backoff_cap = timedelta(seconds=10)
-    xmpp_client.set(client)
+    G['client'] = client
     message_dispatcher = client.summon(
         aioxmpp.dispatcher.SimpleMessageDispatcher
     )
