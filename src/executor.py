@@ -7,6 +7,8 @@ Usage:
 When received a message from <master_jid>, say 'test fire',
 will execute a bash script like this:
     bash cmds/test.sh fire
+
+<master_jid> can be comma-separated multi jids
 '''
 
 import re
@@ -114,7 +116,7 @@ def message_received(msg):
 
 
 async def _executor(my_jid, my_passwd, master_jid):
-    master = aioxmpp.JID.fromstr(master_jid)
+    masters = [aioxmpp.JID.fromstr(i) for i in master_jid.split(',')]
     client = aioxmpp.PresenceManagedClient(
         aioxmpp.JID.fromstr(my_jid),
         aioxmpp.make_security_layer(my_passwd),
@@ -126,17 +128,19 @@ async def _executor(my_jid, my_passwd, master_jid):
     message_dispatcher = client.summon(
         aioxmpp.dispatcher.SimpleMessageDispatcher
     )
-    message_dispatcher.register_callback(
-        aioxmpp.MessageType.CHAT,
-        master,
-        message_received,
-    )
+    for m in masters:
+        message_dispatcher.register_callback(
+            aioxmpp.MessageType.CHAT,
+            m,
+            message_received,
+        )
     roster_client = client.summon(aioxmpp.RosterClient)
     while True:
         try:
             async with client.connected():
-                roster_client.approve(master)
-                roster_client.subscribe(master)
+                for m in masters:
+                    roster_client.approve(m)
+                    roster_client.subscribe(m)
                 logger.info('Connected')
                 await asyncio.sleep(time.time())
         except asyncio.CancelledError:
