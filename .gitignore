@@ -4,5 +4,7 @@
 /src/cmds/*
 !/src/cmds/.gitkeep
 !/src/cmds/ping.sh
+!/src/cmds/help.sh
+!/src/cmds/_require_confirmation.sh
 .DS_Store
 __pycache__/

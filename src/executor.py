@@ -40,10 +40,7 @@ async def _continuous_send_output(reply, stream):
         bytes_ = []
         while not stream.at_eof():
             try:
-                byte = await asyncio.wait_for(
-                    stream.read(1),
-                    timeout=1
-                )
+                byte = await asyncio.wait_for(stream.read(1), timeout=1)
                 if byte:
                     bytes_.append(byte)
             except asyncio.TimeoutError:
@@ -76,7 +73,7 @@ async def _message_received(msg):
     # cmd
     args = text.split(' ')
     arg0 = args[0].lower()
-    if not re.match(r'^[a-z0-9_.-]+$', arg0):
+    if not re.match(r'^[^_][a-z0-9_.-]+$', arg0):
         return
     script = CMD_PATH.joinpath('{}.sh'.format(arg0))
     if not script.is_file():
@@ -91,7 +88,8 @@ async def _message_received(msg):
                 stderr=asyncio.subprocess.STDOUT,
                 # 64KB output max
                 limit=65_536,
-                bufsize=0
+                bufsize=0,
+                cwd=CMD_PATH,
             )
             await asyncio.wait_for(
                 _continuous_send_output(reply, G['proc'].stdout),
@@ -118,21 +116,16 @@ def message_received(msg):
 async def _executor(my_jid, my_passwd, master_jid):
     masters = [aioxmpp.JID.fromstr(i) for i in master_jid.split(',')]
     client = aioxmpp.PresenceManagedClient(
-        aioxmpp.JID.fromstr(my_jid),
-        aioxmpp.make_security_layer(my_passwd),
+        aioxmpp.JID.fromstr(my_jid), aioxmpp.make_security_layer(my_passwd),
     )
     # auto re-connect every 10s after conn down
     client.backoff_factor = 1
     client.backoff_cap = timedelta(seconds=10)
     G['client'] = client
-    message_dispatcher = client.summon(
-        aioxmpp.dispatcher.SimpleMessageDispatcher
-    )
+    message_dispatcher = client.summon(aioxmpp.dispatcher.SimpleMessageDispatcher)
     for m in masters:
         message_dispatcher.register_callback(
-            aioxmpp.MessageType.CHAT,
-            m,
-            message_received,
+            aioxmpp.MessageType.CHAT, m, message_received,
         )
     roster_client = client.summon(aioxmpp.RosterClient)
     while True:

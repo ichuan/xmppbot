@@ -28,3 +28,7 @@ bash /path/to/src/cmds/test.sh fire
 ```
 
 And the stdout/stderr will be replied to JID.
+
+## On cmds
+- cmd with filename startwith `_` is excluded
+- If you want a cmd to be confirmed before executing (i.e. dangerous cmd), `source _require_confirmation.sh` at file top
