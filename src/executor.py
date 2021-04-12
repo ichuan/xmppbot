@@ -13,6 +13,7 @@ will execute a bash script like this:
 
 import re
 import time
+import json
 import asyncio
 from pathlib import Path
 from datetime import timedelta
@@ -27,6 +28,7 @@ import utils
 CMD_PATH = Path(__file__).resolve().parent.joinpath('cmds')
 # 3min
 SUBPROCESS_MAX_RUNTIME = 3 * 60
+MAX_RUNTIME_FILE = CMD_PATH.joinpath('_max_runtime.json')
 
 G = {
     'client': None,
@@ -80,6 +82,13 @@ async def _message_received(msg):
         body = 'script {}.sh not exists'.format(arg0)
     else:
         cmd = ['bash', script.as_posix()] + args[1:]
+        timeout = SUBPROCESS_MAX_RUNTIME
+        if MAX_RUNTIME_FILE.is_file():
+            try:
+                with open(MAX_RUNTIME_FILE) as f:
+                    timeout = int(json.load(f)[arg0])
+            except Exception as e:
+                pass
         try:
             G['proc'] = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -94,7 +103,7 @@ async def _message_received(msg):
             await asyncio.wait_for(
                 _continuous_send_output(reply, G['proc'].stdout),
                 # G['proc'].communicate(),
-                timeout=SUBPROCESS_MAX_RUNTIME,
+                timeout=timeout,
             )
             return
         except asyncio.TimeoutError:
