@@ -75,7 +75,7 @@ async def _message_received(msg):
     # cmd
     args = text.split(' ')
     arg0 = args[0].lower()
-    if not re.match(r'^[^_][a-z0-9_.-]+$', arg0):
+    if not re.match(r'^[^_][a-z0-9_.-]*$', arg0):
         return
     script = CMD_PATH.joinpath('{}.sh'.format(arg0))
     if not script.is_file():
